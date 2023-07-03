@@ -51,7 +51,7 @@ MalHound-gui
 
 You Can Run The App Using The `.EXE` Provided In The Releases Section
 
-* #### Running Locally Via [GitHub](https://github.com/shalabycr7/MalHound)
+* #### Running Locally Via [GitHub](https://github.com/biggiraffe13/malhound)
 
 You Can Run This App Locally By Following These Steps:
 
