@@ -1,5 +1,4 @@
-# malhound 
-# Null bytes removal and IOC extraction tool for PE files
+# malhound - Null bytes(bloat) removal and IOC extraction tool for PE files
 
 > This Is A Simple Application To Debloat/Remove Null-Bytes In Executables and extract IOCs from PE files Using
 > Python
