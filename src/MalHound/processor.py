@@ -12,7 +12,7 @@ The RSRC Class is also from refinery.
 import binascii
 import re
 import zlib
-from typing import Generator, Iterable, Optional
+from typing import Generator, Iterable, Optional, Any
 from typing import Tuple, Callable
 
 import pefile
@@ -343,87 +343,84 @@ def remove_resources(pe: pefile.PE, pe_data: bytearray) -> Tuple[bytearray, int]
     return trimmed
 
 
-def check_section_compression(pe: pefile.PE, pe_data: bytearray, end_of_real_data,
-                              log_message: Callable[[str], None]) -> Tuple[pefile.PE, int, str]:
-    biggest_section = None
-    biggest_uncompressed = int
-    result = ""
+def extract_iocs(pe, log_message: Callable[[str], None], ):
     iocs = []
+    pe_data = bytearray(pe.__data__)
     for section in pe.sections:
         data = section.get_data()
-        # Extract URLs using regular expressions
-        urls = re.findall(rb'https?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|%[0-9a-fA-F][0-9a-fA-F])+', data)
-        if urls:
-            iocs.extend(urls)
-        # Extract IP addresses using regular expressions
-        ips = re.findall(rb'\b(?:\d{1,3}\.){3}\d{1,3}\b', data)
-        if ips:
-            iocs.extend(ips)
-
         section_name = section.Name.decode()
-        compressed_section_size = len(zlib.compress(
-            pe.write()[section.PointerToRawData:
-                       (section.PointerToRawData + section.SizeOfRawData)]))
-        uncompressed_section_size = section.SizeOfRawData
-        section_compression_ratio = uncompressed_section_size / compressed_section_size * 100
-        log_message("Section: " + section_name, section_name, str(round(section_compression_ratio, 2)) + "%",
-                    readable_size(section.SizeOfRawData) + ".", end="\t", flush=True)
-        log_message(" Compression Ratio: " + str(round(section_compression_ratio, 2)) + "%", end="\t", flush=True)
-        log_message("Size of section: " + readable_size(section.SizeOfRawData) + ".", flush=True)
-        if biggest_section is None:
-            biggest_section = section
-            biggest_uncompressed = section_compression_ratio
-        elif section.SizeOfRawData > biggest_section.SizeOfRawData:
-            biggest_section = section
-            biggest_uncompressed = section_compression_ratio
+        section_data = pe_data[section.PointerToRawData:section.PointerToRawData + section.SizeOfRawData]
+        compressed_size = len(zlib.compress(section_data))
+        uncompressed_size = section.SizeOfRawData
+        compression_ratio = uncompressed_size / compressed_size * 100
+        # Extract URLs and IP addresses using regular expressions
+        urls = re.findall(rb'https?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|%[0-9a-fA-F][0-9a-fA-F])+', data)
+        ips = re.findall(rb'\b(?:\d{1,3}\.){3}\d{1,3}\b', data)
+        if urls or ips:
+            iocs.extend(urls + ips)
+        log_message(f"Section: {section_name}", section_name, f"{compression_ratio:.2f}%",
+                    f"{readable_size(section.SizeOfRawData)}.", end="\t", flush=True)
+        log_message(f" Compression Ratio: {compression_ratio:.2f}%", end="\t", flush=True)
+        log_message(f"Size of section: {readable_size(section.SizeOfRawData)}.", flush=True)
     if iocs:
-        log_message('', '', '', '', iocs)
+        log_message("", "", "", "", iocs)
+        toast = ToastNotification(
+            title="IOCs Extracted",
+            message="IOCs of The File Was Extracted",
+            duration=1000,
+            alert=True,
+        )
+        toast.show_toast()
+
+
+def check_section_compression(pe: pefile.PE, pe_data: bytearray, end_of_real_data,
+                              log_message: Callable[[str], None], ) -> tuple[Any, str]:
+    biggest_section = None
+    biggest_uncompressed = 0
+    result = ""
+
+    for section in pe.sections:
+        section_data = pe_data[section.PointerToRawData:section.PointerToRawData + section.SizeOfRawData]
+        compressed_size = len(zlib.compress(section_data))
+        uncompressed_size = section.SizeOfRawData
+        compression_ratio = uncompressed_size / compressed_size * 100
+
+        if biggest_section is None or section.SizeOfRawData > biggest_section.SizeOfRawData:
+            biggest_section = section
+            biggest_uncompressed = compression_ratio
+
     # Handle specific bloated sections
-    if biggest_section.Name.decode() == ".rsrc\x00\x00\x00":
-        # Get biggest resource or resources and drop them from the
-        # Resource table
-        # TODO: recalculate PE header in situations where the
-        # resource is not at the end of an executable.
-        # TODO: Handle other tomfoolery required when resource
-        # is not at end of executable.
-        log_message('''
-Bloat was located in the resource section. Removing bloat.. 
-''')
+    section_name = biggest_section.Name.decode()
 
+    if section_name == ".rsrc\x00\x00\x00":
+        log_message("Bloat was located in the resource section. Removing bloat.. ")
         bytes_removed = remove_resources(pe, pe_data)
-        end_of_real_data = - bytes_removed
-        return end_of_real_data, result
-    elif biggest_section.Name.decode() == ".text\x00\x00\x00":
-        # Data stored in the .text section is often a .NET Resource. The following checks
-        # to confirm it is .NET and then drops the resources.
-        if pe.OPTIONAL_HEADER.DATA_DIRECTORY[14].Size:
-            log_message('''
-Bloat was detected in the text section. Bloat is likely in a .NET Resource 
-This use case cannot be processed at this time. ''')
+        end_of_real_data = -bytes_removed
         return end_of_real_data, result
 
-    # The use cases covered by this section are at the end of
-    # the binary. In my experience, the bloated sections are
-    # usually at the end unless they are bloat from .NET Resources.
-    if biggest_uncompressed > 3000:
-        log_message('''
-The compression ratio is indicative of a bloated section.
-''', end="", flush=True)
-        # Get the size of the section.
-        section_end = section.PointerToRawData + section.SizeOfRawData
-        original_section_size = section.SizeOfRawData
-        section_data = pe_data[section.PointerToRawData:section_end]
-        delta_last_non_junk = trim_junk(section_data, original_section_size)
-        pe_data[section.PointerToRawData + delta_last_non_junk:section_end] = []
-        section_bytes_to_remove = original_section_size - delta_last_non_junk
-        end_of_real_data = end_of_real_data - section_bytes_to_remove
-        # This will update the last section header, SizeOfRawData, SizeOfImage.
-        pe.sections[pe.sections.index(biggest_section)].section_max_addr -= section_bytes_to_remove
-        pe.sections[pe.sections.index(biggest_section)].SizeOfRawData -= section_bytes_to_remove
-        # pe.sections[pe.sections.index(biggest_section)].Misc_VirtualSize -= section_bytes_to_remove
-        # pe.OPTIONAL_HEADER.SizeOfImage -= section_bytes_to_remove
-        log_message("Bloated section reduced.")
+    if section_name == ".text\x00\x00\x00" and pe.OPTIONAL_HEADER.DATA_DIRECTORY[14].Size:
+        log_message("Bloat was detected in the text section. Bloat is likely in a .NET Resource "
+                    "This use case cannot be processed at this time. ")
         return end_of_real_data, result
+
+    if biggest_uncompressed > 3000:
+        log_message("The compression ratio is indicative of a bloated section.", end="", flush=True)
+
+        # Trim the junk and update the PE file
+        section_end = biggest_section.PointerToRawData + biggest_section.SizeOfRawData
+        original_section_size = biggest_section.SizeOfRawData
+        delta_last_non_junk = trim_junk(pe_data[section.PointerToRawData:section_end], original_section_size)
+        pe_data[biggest_section.PointerToRawData + delta_last_non_junk:section_end] = []
+        section_bytes_to_remove = original_section_size - delta_last_non_junk
+        end_of_real_data -= section_bytes_to_remove
+
+        # This will update the last section header, SizeOfRawData, SizeOfImage.
+        biggest_section.section_max_addr -= section_bytes_to_remove
+        biggest_section.SizeOfRawData -= section_bytes_to_remove
+
+        log_message("Bloated section reduced.")
+
+    return end_of_real_data, result
 
 
 def trim_junk(bloated_content: bytes, original_size_with_junk: int) -> int:
@@ -501,7 +498,7 @@ def trim_junk(bloated_content: bytes, original_size_with_junk: int) -> int:
 
 
 def process_pe(pe: pefile.PE, out_path: str, unsafe_processing: bool,
-               log_message: Callable[[str], None]) -> None:
+               log_message: Callable[[str], None], ) -> float:
     """Prepare PE, perform checks, remote junk, write patched binary.
     @rtype: object
     """
@@ -567,9 +564,14 @@ def process_pe(pe: pefile.PE, out_path: str, unsafe_processing: bool,
 
     # Report results
     if end_of_real_data == beginning_file_size:
-        log_message(
-            "No automated method for reducing the size worked. Please consider sharing the sample for additional "
-            "analysis.")
+        log_message("File size can not be reduced further")
+        toast = ToastNotification(
+            title="Failed To Trim The File",
+            message="File Size Can Not Be Reduced Further",
+            duration=2000,
+            alert=True,
+        )
+        toast.show_toast()
     else:
         pe.__data__ = pe_data
         final_file_size, new_pe_name = write_patched_file(out_path,
@@ -590,7 +592,7 @@ def process_pe(pe: pefile.PE, out_path: str, unsafe_processing: bool,
         toast = ToastNotification(
             title="Output File Saved",
             message="The Modified File Was Saved In The Same Location",
-            duration=3000,
+            duration=2000,
             alert=True,
         )
         toast.show_toast()
