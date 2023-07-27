@@ -13,10 +13,10 @@
     * `MD5` Hash
     * Packed IOCs
     * Compression Ratio
-    * Number Of Sections In The `EXE`
-    * Display Each Section With Information Like (Name, Size, and Compression Ratio) For Each Section
+    * Number of Sections in the `PE`
+    * Display Each Section With Information Like (Name, Size, and Compression Ratio) for Each Section
 
-* Modify The `EXE` File By:
+* Modify the `PE` File by:
     * Remove The Excess Null-Bytes
 
 ### Screenshots
@@ -28,7 +28,7 @@
 
 * #### Running The GUI / CLI Version
 
-Install The App Package Using `pip` By Downloading the `wheel` Package Include Then Run:
+Install The App Package Using `pip` by Downloading the `wheel` Package Include Then Run:
 
 ```commandline
 pip install MalHound-0.0.1-py3-none-any.whl
