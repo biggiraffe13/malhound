@@ -1,2 +1,11 @@
-ttkbootstrap>=1.10.1
-pefile>=2023.2.7
+Python interpreter installed. (Python 3.6 or higher is recommended.)
+'hashlib' library
+'os' library
+'sys' library
+'threading' library
+'time' library
+'pathlib' library
+'tkinter' library
+'ttkbootstrap' library
+'pefile' library
+'pyperclip' library
