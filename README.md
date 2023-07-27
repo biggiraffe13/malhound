@@ -2,6 +2,8 @@
 
 > This Is A Simple Application To Debloat/Remove Null-Bytes In Executables and extract IOCs from PE files Using
 > Python
+![image](https://github.com/biggiraffe13/malhound/assets/117535720/e108b249-be92-4213-ae8c-5bd8346e318b)
+
 ---
 
 ### Core Features
