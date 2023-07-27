@@ -21,9 +21,8 @@
 * Modify the `PE` File by:
     * Remove The Excess Null-Bytes
 
-### Screenshots
-
 #### Main Interface
+![image](https://github.com/biggiraffe13/malhound/assets/117535720/c83c55dd-8a0f-42a0-b4b2-fd687ff681b8)
 
 
 ### Running The App
