@@ -38,7 +38,7 @@ pip install MalHound-0.0.1-py3-none-any.whl
 * To Access The **CLI** Run:
 
 ```commandline
-MalHound input_file_path
+MalHound -u input_file_path
 ```
 
 * To Access The **GUI** Run:
